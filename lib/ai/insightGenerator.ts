@@ -1,6 +1,7 @@
 import "server-only";
 
 import { generateTextOnce } from "@/lib/ai/generate-text";
+import { runWithLlmRateLimit as runWithSharedLlmRateLimit } from "@/lib/ai/llmRateLimiter";
 import { DEFAULT_OPENAI_MODEL } from "@/lib/ai/openai";
 
 export type Dimension = "Execution" | "Engagement" | "Collaboration" | "Growth";
@@ -420,13 +421,6 @@ const MIN_LLM_CALL_INTERVAL_MS = Number(
   process.env.INSIGHT_LLM_MIN_INTERVAL_MS ?? "30000"
 );
 
-let llmQueue: Promise<void> = Promise.resolve();
-let lastLlmCallAt = 0;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function asDimension(value: unknown): Dimension | null {
   if (
     value === "Execution" ||
@@ -439,30 +433,16 @@ function asDimension(value: unknown): Dimension | null {
   return null;
 }
 
-async function runWithLlmRateLimit<T>(fn: () => Promise<T>): Promise<T> {
-  const previous = llmQueue;
-  let releaseQueue: () => void = () => {};
-  llmQueue = new Promise<void>((resolve) => {
-    releaseQueue = resolve;
+async function runInsightWithLlmRateLimit<T>(fn: () => Promise<T>): Promise<T> {
+  return runWithSharedLlmRateLimit({
+    key: "insight-generator",
+    minIntervalMs: MIN_LLM_CALL_INTERVAL_MS,
+    fn,
   });
-  await previous;
-
-  const elapsed = Date.now() - lastLlmCallAt;
-  const waitMs = Math.max(0, MIN_LLM_CALL_INTERVAL_MS - elapsed);
-  if (waitMs > 0) {
-    await sleep(waitMs);
-  }
-
-  try {
-    return await fn();
-  } finally {
-    lastLlmCallAt = Date.now();
-    releaseQueue();
-  }
 }
 
 async function generateInsightText(prompt: string) {
-  return runWithLlmRateLimit(() =>
+  return runInsightWithLlmRateLimit(() =>
     generateTextOnce({
       prompt,
       system: INSIGHT_SYSTEM_PROMPT,
