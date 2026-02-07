@@ -5,6 +5,7 @@ import {
   numeric,
   pgTable,
   serial,
+  text,
   timestamp,
   uniqueIndex,
   varchar,
@@ -93,4 +94,55 @@ export const slackWeeklyActivity = pgTable(
       table.weekStart
     ),
   ]
+);
+
+export const employeeMonthlyInsights = pgTable("employee_monthly_insights", {
+  employeeEmail: varchar("employee_email", { length: 100 })
+    .notNull()
+    .references(() => employees.email, { onDelete: "cascade" }),
+  month: varchar("month", { length: 7 }).notNull(),
+  executionInsight: text("execution_insight").notNull(),
+  engagementInsight: text("engagement_insight").notNull(),
+  collaborationInsight: text("collaboration_insight").notNull(),
+  growthInsight: text("growth_insight").notNull(),
+  overallSummary: text("overall_summary").notNull(),
+  identifiedRisks: jsonb("identified_risks")
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  identifiedOpportunities: jsonb("identified_opportunities")
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  supportingSignals: jsonb("supporting_signals")
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  confidenceLevel: varchar("confidence_level", { length: 16 }).notNull(),
+  generatedByModel: varchar("generated_by_model", { length: 64 }).notNull(),
+  modelVersion: varchar("model_version", { length: 64 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const employeeQuarterlyInsights = pgTable(
+  "employee_quarterly_insights",
+  {
+    employeeEmail: varchar("employee_email", { length: 100 })
+      .notNull()
+      .references(() => employees.email, { onDelete: "cascade" }),
+    quarter: varchar("quarter", { length: 7 }).notNull(),
+    trajectorySummary: text("trajectory_summary").notNull(),
+    keyStrengths: jsonb("key_strengths").notNull().default(sql`'[]'::jsonb`),
+    keyConcerns: jsonb("key_concerns").notNull().default(sql`'[]'::jsonb`),
+    burnoutAssessment: text("burnout_assessment").notNull(),
+    growthAssessment: text("growth_assessment").notNull(),
+    retentionAssessment: text("retention_assessment").notNull(),
+    recommendedActions: jsonb("recommended_actions")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    evidenceSnapshots: jsonb("evidence_snapshots")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    confidenceLevel: varchar("confidence_level", { length: 16 }).notNull(),
+    generatedByModel: varchar("generated_by_model", { length: 64 }).notNull(),
+    modelVersion: varchar("model_version", { length: 64 }).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  }
 );
