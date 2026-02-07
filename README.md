@@ -12,6 +12,9 @@ PRFRD is an autonomous agent platform for weekly engineering signal ingestion, m
 
 ## Architecture
 
+<img width="1275" height="396" alt="image" src="https://github.com/user-attachments/assets/cccf4505-420d-4f58-9460-6c4cee0c0fa0" />
+
+
 ### Data ingestion pipeline (autonomous + weekly cron)
 
 Every week, autonomous collector agents ingest collaboration and delivery signals from GitHub and Slack into normalized weekly tables.
