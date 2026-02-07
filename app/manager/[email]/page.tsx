@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import ManagerDebateChat from "@/components/manager/manager-debate-chat";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -61,7 +62,7 @@ export default async function ManagerEngineerDetailPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <main className="mx-auto w-full max-w-4xl px-6 py-10">
+      <main className="mx-auto w-full max-w-5xl px-6 py-10">
         <header className="flex flex-col gap-4 border-b border-border/60 pb-6 md:flex-row md:items-end md:justify-between">
           <div className="space-y-2">
             <div className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
@@ -83,7 +84,7 @@ export default async function ManagerEngineerDetailPage({ params }: PageProps) {
           </Button>
         </header>
 
-        <section className="mt-8">
+        <section className="mt-8 space-y-6">
           <Card className="border-border/60">
             <CardHeader>
               <CardTitle className="flex flex-wrap items-center gap-2">
@@ -204,6 +205,11 @@ export default async function ManagerEngineerDetailPage({ params }: PageProps) {
               {slackHighlights.length} Slack themes
             </CardFooter>
           </Card>
+
+          <ManagerDebateChat
+            employeeEmail={snapshot.employee.email}
+            employeeName={snapshot.employee.name}
+          />
         </section>
       </main>
     </div>
