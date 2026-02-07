@@ -5,14 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -28,7 +20,6 @@ type ManagerDebateChatProps = {
 };
 
 type DebateMessage = {
-  employeeId: number;
   agentRole: "advocate" | "examiner";
   stance: string;
   confidenceLevel: string;
@@ -41,18 +32,14 @@ type DebateMessage = {
     bonus: string;
     promotion: string;
   } | null;
-  createdAt: string;
 };
 
 type DebateApiSuccess = {
   status: "success";
   run: {
     id: number;
-    employeeId: number;
     quarter: string;
     status: string;
-    createdAt: string;
-    completedAt: string | null;
   };
   messages: DebateMessage[];
 };
@@ -74,32 +61,6 @@ type DebateViewState =
   | { kind: "empty" }
   | { kind: "ready"; data: DebateApiSuccess };
 
-type ConversationEntry = {
-  id: string;
-  agentRole: "advocate" | "examiner";
-  label: "stance" | "argument" | "risk" | "recommendation";
-  text: string;
-  evidenceRefs: string[];
-  confidenceLevel: string;
-  createdAt: string;
-};
-
-const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-});
-
-function formatDateTime(iso: string) {
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) {
-    return iso;
-  }
-  return dateTimeFormatter.format(parsed);
-}
-
 function toTitleCase(text: string): string {
   if (!text) return "";
   return text
@@ -108,75 +69,21 @@ function toTitleCase(text: string): string {
     .join(" ");
 }
 
-function buildConversationEntries(messages: DebateMessage[]): ConversationEntry[] {
-  return messages.flatMap((message, messageIndex) => {
-    const entries: ConversationEntry[] = [];
+function pickLatestMessages(messages: DebateMessage[]) {
+  let advocate: DebateMessage | null = null;
+  let examiner: DebateMessage | null = null;
 
-    if (message.stance) {
-      entries.push({
-        id: `${message.agentRole}-${messageIndex}-stance`,
-        agentRole: message.agentRole,
-        label: "stance",
-        text: `Stance: ${toTitleCase(message.stance)}`,
-        evidenceRefs: [],
-        confidenceLevel: message.confidenceLevel,
-        createdAt: message.createdAt,
-      });
+  for (const message of messages) {
+    if (message.agentRole === "advocate") {
+      advocate = message;
+      continue;
     }
-
-    for (const [argumentIndex, argument] of message.arguments.entries()) {
-      entries.push({
-        id: `${message.agentRole}-${messageIndex}-argument-${argumentIndex}`,
-        agentRole: message.agentRole,
-        label: "argument",
-        text: argument.claim,
-        evidenceRefs: argument.evidenceRefs,
-        confidenceLevel: message.confidenceLevel,
-        createdAt: message.createdAt,
-      });
+    if (message.agentRole === "examiner") {
+      examiner = message;
     }
+  }
 
-    for (const [riskIndex, risk] of message.risks.entries()) {
-      entries.push({
-        id: `${message.agentRole}-${messageIndex}-risk-${riskIndex}`,
-        agentRole: message.agentRole,
-        label: "risk",
-        text: risk,
-        evidenceRefs: [],
-        confidenceLevel: message.confidenceLevel,
-        createdAt: message.createdAt,
-      });
-    }
-
-    if (message.recommendation) {
-      const bonus = message.recommendation.bonus || "n/a";
-      const promotion = message.recommendation.promotion || "n/a";
-
-      entries.push({
-        id: `${message.agentRole}-${messageIndex}-recommendation`,
-        agentRole: message.agentRole,
-        label: "recommendation",
-        text: `Recommendation: bonus ${bonus}, promotion ${promotion}.`,
-        evidenceRefs: [],
-        confidenceLevel: message.confidenceLevel,
-        createdAt: message.createdAt,
-      });
-    }
-
-    if (entries.length === 0) {
-      entries.push({
-        id: `${message.agentRole}-${messageIndex}-empty`,
-        agentRole: message.agentRole,
-        label: "argument",
-        text: "No persisted comments in this response.",
-        evidenceRefs: [],
-        confidenceLevel: message.confidenceLevel,
-        createdAt: message.createdAt,
-      });
-    }
-
-    return entries;
-  });
+  return { advocate, examiner };
 }
 
 export default function ManagerDebateChat({
@@ -185,6 +92,13 @@ export default function ManagerDebateChat({
 }: ManagerDebateChatProps) {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<DebateViewState>({ kind: "idle" });
+  const [visibleRoles, setVisibleRoles] = useState<{
+    advocate: boolean;
+    examiner: boolean;
+  }>({
+    advocate: false,
+    examiner: false,
+  });
 
   useEffect(() => {
     if (!open) {
@@ -249,44 +163,76 @@ export default function ManagerDebateChat({
     return () => controller.abort();
   }, [employeeEmail, open]);
 
-  const completionLabel = useMemo(() => {
+  const latestMessages = useMemo(() => {
     if (state.kind !== "ready") {
-      return null;
+      return { advocate: null, examiner: null };
     }
 
-    return state.data.run.completedAt
-      ? `Completed ${formatDateTime(state.data.run.completedAt)}`
-      : `Started ${formatDateTime(state.data.run.createdAt)}`;
+    return pickLatestMessages(state.data.messages);
   }, [state]);
 
-  const conversationEntries = useMemo(() => {
-    if (state.kind !== "ready") {
-      return [];
+  useEffect(() => {
+    if (!open || state.kind !== "ready") {
+      const resetTimer = window.setTimeout(() => {
+        setVisibleRoles({
+          advocate: false,
+          examiner: false,
+        });
+      }, 0);
+
+      return () => {
+        window.clearTimeout(resetTimer);
+      };
     }
 
-    return buildConversationEntries(state.data.messages);
-  }, [state]);
+    const timers: number[] = [];
+    const hasAdvocate = Boolean(latestMessages.advocate);
+    const hasExaminer = Boolean(latestMessages.examiner);
+
+    timers.push(
+      window.setTimeout(() => {
+        setVisibleRoles({
+          advocate: false,
+          examiner: false,
+        });
+      }, 0)
+    );
+
+    if (hasAdvocate) {
+      timers.push(
+        window.setTimeout(() => {
+          setVisibleRoles((current) => ({ ...current, advocate: true }));
+        }, 120)
+      );
+    }
+
+    if (hasExaminer) {
+      timers.push(
+        window.setTimeout(() => {
+          setVisibleRoles((current) => ({ ...current, examiner: true }));
+        }, hasAdvocate ? 700 : 120)
+      );
+    }
+
+    return () => {
+      for (const timer of timers) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [
+    latestMessages.advocate,
+    latestMessages.examiner,
+    open,
+    state.kind,
+  ]);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <Card className="border-border/60">
-        <CardHeader>
-          <CardTitle>Analysis debate</CardTitle>
-          <CardDescription>
-            Open the latest advocate and examiner responses in conversation view.
-          </CardDescription>
-          <CardAction>
-            <SheetTrigger asChild>
-              <Button type="button" size="sm" variant="outline">
-                Open debate conversation
-              </Button>
-            </SheetTrigger>
-          </CardAction>
-        </CardHeader>
-        <CardContent className="text-xs text-muted-foreground">
-          This opens a sheet with the latest `analysis_debate_response` comments.
-        </CardContent>
-      </Card>
+      <SheetTrigger asChild>
+        <Button type="button" size="sm" variant="outline">
+          Open debate conversation
+        </Button>
+      </SheetTrigger>
 
       <SheetContent side="right" className="flex h-full w-full flex-col p-0 sm:max-w-2xl">
         <SheetHeader>
@@ -319,55 +265,144 @@ export default function ManagerDebateChat({
                 <Badge variant={state.data.run.status === "completed" ? "secondary" : "outline"}>
                   {toTitleCase(state.data.run.status)}
                 </Badge>
-                {completionLabel ? <Badge variant="ghost">{completionLabel}</Badge> : null}
               </div>
 
               <div className="space-y-3">
-                {conversationEntries.map((entry) => {
-                  const isAdvocate = entry.agentRole === "advocate";
+                {latestMessages.advocate ? (
+                  visibleRoles.advocate ? (
+                    <DebateBubble role="advocate" message={latestMessages.advocate} />
+                  ) : (
+                    <StreamingPlaceholder label="Advocate is responding..." />
+                  )
+                ) : (
+                  <div className="text-xs text-muted-foreground">
+                    No advocate response was persisted for this run.
+                  </div>
+                )}
 
-                  return (
-                    <div
-                      key={entry.id}
-                      className={cn("flex", isAdvocate ? "justify-start" : "justify-end")}
-                    >
-                      <div
-                        className={cn(
-                          "w-full max-w-[40rem] border px-3 py-2",
-                          isAdvocate
-                            ? "border-border/60 bg-muted/20"
-                            : "border-border/60 bg-secondary/30"
-                        )}
-                      >
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant={isAdvocate ? "secondary" : "default"}>
-                            {isAdvocate ? "Advocate" : "Examiner"}
-                          </Badge>
-                          <Badge variant="outline">{toTitleCase(entry.label)}</Badge>
-                          <Badge variant="outline">
-                            Confidence {toTitleCase(entry.confidenceLevel)}
-                          </Badge>
-                          <span className="text-[11px] text-muted-foreground">
-                            {formatDateTime(entry.createdAt)}
-                          </span>
-                        </div>
-
-                        <div className="mt-2 text-xs font-medium">{entry.text}</div>
-
-                        {entry.evidenceRefs.length > 0 ? (
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            Evidence: {entry.evidenceRefs.join(", ")}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })}
+                {latestMessages.examiner ? (
+                  visibleRoles.examiner ? (
+                    <DebateBubble role="examiner" message={latestMessages.examiner} />
+                  ) : visibleRoles.advocate || !latestMessages.advocate ? (
+                    <StreamingPlaceholder label="Examiner is responding..." />
+                  ) : null
+                ) : (
+                  <div className="text-xs text-muted-foreground">
+                    No examiner response was persisted for this run.
+                  </div>
+                )}
               </div>
             </>
           ) : null}
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+type DebateBubbleProps = {
+  role: "advocate" | "examiner";
+  message: DebateMessage;
+};
+
+function DebateBubble({ role, message }: DebateBubbleProps) {
+  const isAdvocate = role === "advocate";
+
+  return (
+    <div
+      className={cn(
+        "animate-in fade-in-0 slide-in-from-bottom-2 duration-500",
+        "flex",
+        isAdvocate ? "justify-start" : "justify-end"
+      )}
+    >
+      <article
+        className={cn(
+          "w-full max-w-[40rem] border px-4 py-3",
+          isAdvocate
+            ? "border-border/60 bg-muted/15"
+            : "border-destructive/40 bg-destructive/10"
+        )}
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={isAdvocate ? "secondary" : "destructive"}>
+            {isAdvocate ? "Advocate" : "Examiner"}
+          </Badge>
+          <Badge variant="outline">Confidence {toTitleCase(message.confidenceLevel)}</Badge>
+        </div>
+
+        <div className="mt-3 space-y-3 text-sm">
+          <section className="space-y-1">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              Stance
+            </div>
+            <div className="font-medium">
+              {message.stance ? toTitleCase(message.stance) : "No stance provided."}
+            </div>
+          </section>
+
+          <section className="space-y-1">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              Arguments
+            </div>
+            {message.arguments.length > 0 ? (
+              <div className="space-y-2">
+                {message.arguments.map((argument, index) => (
+                  <div key={`${role}-argument-${index}`} className="border border-border/50 px-3 py-2">
+                    <div>{argument.claim}</div>
+                    {argument.evidenceRefs.length > 0 ? (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Evidence: {argument.evidenceRefs.join(", ")}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-muted-foreground">No argument details were captured.</div>
+            )}
+          </section>
+
+          {message.risks.length > 0 ? (
+            <section className="space-y-1">
+              <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                Risks
+              </div>
+              <div className="space-y-1">
+                {message.risks.map((risk, index) => (
+                  <div key={`${role}-risk-${index}`} className="border border-border/50 px-3 py-2">
+                    {risk}
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {message.recommendation ? (
+            <section className="space-y-1">
+              <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                Recommendation
+              </div>
+              <div>
+                Bonus: {toTitleCase(message.recommendation.bonus || "n/a")} · Promotion:{" "}
+                {toTitleCase(message.recommendation.promotion || "n/a")}
+              </div>
+            </section>
+          ) : null}
+        </div>
+      </article>
+    </div>
+  );
+}
+
+type StreamingPlaceholderProps = {
+  label: string;
+};
+
+function StreamingPlaceholder({ label }: StreamingPlaceholderProps) {
+  return (
+    <div className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300 border border-dashed border-border/60 px-3 py-2">
+      <div className="animate-pulse text-xs text-muted-foreground">{label}</div>
+    </div>
   );
 }
