@@ -71,6 +71,39 @@ export const employeesData = [
   },
 ];
 
+export const employeeAnalysisContextData = [
+  {
+    employeeEmail: "alice@company.com",
+    managerEmail: "manager@company.com",
+    bonusEligible: true,
+    promotionEligible: true,
+  },
+  {
+    employeeEmail: "bob@company.com",
+    managerEmail: "manager@company.com",
+    bonusEligible: true,
+    promotionEligible: false,
+  },
+  {
+    employeeEmail: "carol@company.com",
+    managerEmail: "manager@company.com",
+    bonusEligible: false,
+    promotionEligible: false,
+  },
+  {
+    employeeEmail: "dave@company.com",
+    managerEmail: "manager@company.com",
+    bonusEligible: true,
+    promotionEligible: true,
+  },
+  {
+    employeeEmail: "eve@company.com",
+    managerEmail: "manager@company.com",
+    bonusEligible: false,
+    promotionEligible: true,
+  },
+];
+
 export const githubWeeklyData: GithubWeekRow[] = [
   {
     employeeEmail: "alice@company.com",

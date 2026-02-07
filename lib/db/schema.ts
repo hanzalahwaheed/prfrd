@@ -1,5 +1,7 @@
 import {
+  boolean,
   date,
+  index,
   integer,
   jsonb,
   numeric,
@@ -115,6 +117,9 @@ export const employeeMonthlyInsights = pgTable("employee_monthly_insights", {
   supportingSignals: jsonb("supporting_signals")
     .notNull()
     .default(sql`'[]'::jsonb`),
+  dataSufficiency: jsonb("data_sufficiency")
+    .notNull()
+    .default(sql`'{}'::jsonb`),
   confidenceLevel: varchar("confidence_level", { length: 16 }).notNull(),
   generatedByModel: varchar("generated_by_model", { length: 64 }).notNull(),
   modelVersion: varchar("model_version", { length: 64 }).notNull(),
@@ -140,9 +145,142 @@ export const employeeQuarterlyInsights = pgTable(
     evidenceSnapshots: jsonb("evidence_snapshots")
       .notNull()
       .default(sql`'[]'::jsonb`),
+    dataSufficiency: jsonb("data_sufficiency")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     confidenceLevel: varchar("confidence_level", { length: 16 }).notNull(),
     generatedByModel: varchar("generated_by_model", { length: 64 }).notNull(),
     modelVersion: varchar("model_version", { length: 64 }).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   }
+);
+
+export const employeeAnalysisContext = pgTable(
+  "employee_analysis_context",
+  {
+    id: serial("id").primaryKey(),
+    employeeEmail: varchar("employee_email", { length: 100 })
+      .notNull()
+      .references(() => employees.email, { onDelete: "cascade" }),
+    managerEmail: varchar("manager_email", { length: 100 }).notNull(),
+    bonusEligible: boolean("bonus_eligible").notNull().default(false),
+    promotionEligible: boolean("promotion_eligible").notNull().default(false),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("employee_analysis_context_employee_idx").on(table.employeeEmail),
+  ]
+);
+
+export const analysisRun = pgTable(
+  "analysis_run",
+  {
+    id: serial("id").primaryKey(),
+    employeeEmail: varchar("employee_email", { length: 100 })
+      .notNull()
+      .references(() => employees.email, { onDelete: "cascade" }),
+    managerEmail: varchar("manager_email", { length: 100 }).notNull(),
+    quarter: varchar("quarter", { length: 7 }).notNull(),
+    status: varchar("status", { length: 16 }).notNull().default("running"),
+    failedStage: varchar("failed_stage", { length: 32 }),
+    failureReason: text("failure_reason"),
+    requestPayload: jsonb("request_payload").notNull().default(sql`'{}'::jsonb`),
+    evidenceCatalog: jsonb("evidence_catalog")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    dataSufficiency: jsonb("data_sufficiency")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    stageUsage: jsonb("stage_usage").notNull().default(sql`'{}'::jsonb`),
+    startedAt: timestamp("started_at").defaultNow().notNull(),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("analysis_run_employee_quarter_created_idx").on(
+      table.employeeEmail,
+      table.quarter,
+      table.createdAt
+    ),
+    index("analysis_run_status_created_idx").on(table.status, table.createdAt),
+  ]
+);
+
+export const analysisDebateResponse = pgTable(
+  "analysis_debate_response",
+  {
+    id: serial("id").primaryKey(),
+    runId: integer("run_id")
+      .notNull()
+      .references(() => analysisRun.id, { onDelete: "cascade" }),
+    agentRole: varchar("agent_role", { length: 16 }).notNull(),
+    payload: jsonb("payload").notNull().default(sql`'{}'::jsonb`),
+    confidenceLevel: varchar("confidence_level", { length: 16 }).notNull(),
+    generatedByModel: varchar("generated_by_model", { length: 64 }).notNull(),
+    modelVersion: varchar("model_version", { length: 64 }).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("analysis_debate_response_run_agent_idx").on(
+      table.runId,
+      table.agentRole
+    ),
+  ]
+);
+
+export const analysisArbiterDecision = pgTable(
+  "analysis_arbiter_decision",
+  {
+    id: serial("id").primaryKey(),
+    runId: integer("run_id")
+      .notNull()
+      .references(() => analysisRun.id, { onDelete: "cascade" }),
+    payload: jsonb("payload").notNull().default(sql`'{}'::jsonb`),
+    confidenceLevel: varchar("confidence_level", { length: 16 }).notNull(),
+    generatedByModel: varchar("generated_by_model", { length: 64 }).notNull(),
+    modelVersion: varchar("model_version", { length: 64 }).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("analysis_arbiter_decision_run_idx").on(table.runId)]
+);
+
+export const employeePrompt = pgTable(
+  "employee_prompt",
+  {
+    id: serial("id").primaryKey(),
+    runId: integer("run_id")
+      .notNull()
+      .references(() => analysisRun.id, { onDelete: "cascade" }),
+    employeeEmail: varchar("employee_email", { length: 100 })
+      .notNull()
+      .references(() => employees.email, { onDelete: "cascade" }),
+    quarter: varchar("quarter", { length: 7 }).notNull(),
+    theme: varchar("theme", { length: 32 }).notNull(),
+    message: text("message").notNull(),
+    evidenceRefs: jsonb("evidence_refs").notNull().default(sql`'[]'::jsonb`),
+    confidenceLevel: varchar("confidence_level", { length: 16 }).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("employee_prompt_run_idx").on(table.runId)]
+);
+
+export const managerFeedback = pgTable(
+  "manager_feedback",
+  {
+    id: serial("id").primaryKey(),
+    runId: integer("run_id")
+      .notNull()
+      .references(() => analysisRun.id, { onDelete: "cascade" }),
+    managerEmail: varchar("manager_email", { length: 100 }).notNull(),
+    focusAreas: jsonb("focus_areas").notNull().default(sql`'[]'::jsonb`),
+    suggestedQuestions: jsonb("suggested_questions")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    doNotAssume: jsonb("do_not_assume").notNull().default(sql`'[]'::jsonb`),
+    evidenceRefs: jsonb("evidence_refs").notNull().default(sql`'[]'::jsonb`),
+    confidenceLevel: varchar("confidence_level", { length: 16 }).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("manager_feedback_run_idx").on(table.runId)]
 );

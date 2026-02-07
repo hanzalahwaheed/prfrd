@@ -57,7 +57,33 @@ Expected response shape per call:
 }
 ```
 
-## 4) Verify inserted rows
+## 4) Run manager analysis (post-synthesis)
+
+After monthly and quarterly insight rows exist, run:
+
+```bash
+curl -sS -X POST http://localhost:3000/api/insights/generate-manager-analysis \
+  -H 'Content-Type: application/json' \
+  -d '{"employeeEmail":"alice@company.com","quarter":"2025-Q4","monthKeys":["2025-10","2025-11","2025-12"]}'
+```
+
+Expected response shape:
+
+```json
+{
+  "status": "success",
+  "runId": 1,
+  "employeeEmail": "alice@company.com",
+  "quarter": "2025-Q4",
+  "outputs": {
+    "debate": {},
+    "arbiter": {},
+    "guidance": {}
+  }
+}
+```
+
+## 5) Verify inserted rows
 
 ```bash
 node -e "require('dotenv').config({path:'.env.local'}); const {neon}=require('@neondatabase/serverless'); (async()=>{const sql=neon(process.env.DATABASE_URL); const m=await sql`select employee_email, count(*)::int as monthly_count from employee_monthly_insights group by employee_email order by employee_email`; const q=await sql`select employee_email, count(*)::int as quarterly_count from employee_quarterly_insights group by employee_email order by employee_email`; console.log('monthly',m); console.log('quarterly',q);})().catch(e=>{console.error(e); process.exit(1);});"
@@ -67,3 +93,4 @@ Notes:
 - Default behavior (no `startDate`/`endDate`) still uses rolling last 12 weeks.
 - This flow is run-once as-is; reruns append additional insight rows.
 - Internally, the API now uses one LLM call per month bucket and one LLM call per quarter bucket.
+- Manager analysis uses three LLM calls per run (combined debate, arbiter, combined guidance).

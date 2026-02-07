@@ -5,6 +5,15 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Card,
   CardAction,
   CardContent,
@@ -20,6 +29,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type {
   EngineerMonthlySummary,
@@ -40,6 +50,7 @@ type RecheckStatsRequest = {
   periodKey: string;
   detailLabel: string;
   detailValue: string;
+  employeeNote: string;
 };
 
 type Notice = {
@@ -315,6 +326,10 @@ export default function EngineerActivityPanels({
   const [flaggingKey, setFlaggingKey] = useState<string | null>(null);
   const [flagNotice, setFlagNotice] = useState<Notice | null>(null);
   const [isMonthlySheetOpen, setIsMonthlySheetOpen] = useState(false);
+  const [isFlagDialogOpen, setIsFlagDialogOpen] = useState(false);
+  const [activeFlagDetail, setActiveFlagDetail] = useState<DetailItem | null>(null);
+  const [flagReason, setFlagReason] = useState("");
+  const [flagReasonError, setFlagReasonError] = useState<string | null>(null);
   const [existingMonthlyReport, setExistingMonthlyReport] =
     useState<ExistingMonthlyReportView>({ kind: "idle" });
 
@@ -418,11 +433,39 @@ export default function EngineerActivityPanels({
     return () => controller.abort();
   }, [isMonthlySheetOpen, snapshot.employee.email]);
 
-  async function flagForRecheck(payload: RecheckStatsRequest) {
+  function openFlagDialog(detail: DetailItem) {
+    setActiveFlagDetail(detail);
+    setFlagReason("");
+    setFlagReasonError(null);
+    setIsFlagDialogOpen(true);
+  }
+
+  async function submitFlagForRecheck() {
+    if (!activeFlagDetail) {
+      return;
+    }
+
+    const note = flagReason.trim();
+    if (note.length < 5) {
+      setFlagReasonError("Please add a short note explaining what seems inaccurate.");
+      return;
+    }
+
+    const payload: RecheckStatsRequest = {
+      employeeEmail: snapshot.employee.email,
+      employeeName: snapshot.employee.name,
+      scope: activeFlagDetail.scope,
+      periodKey: activeFlagDetail.periodKey,
+      detailLabel: activeFlagDetail.label,
+      detailValue: activeFlagDetail.text,
+      employeeNote: note,
+    };
+
     const detailKey = sanitizeKey(payload.detailLabel);
     const requestKey = `${payload.scope}:${payload.periodKey}:${detailKey}`;
     setFlaggingKey(requestKey);
     setFlagNotice(null);
+    setFlagReasonError(null);
 
     try {
       const response = await fetch("/api/insights/recheck-stats", {
@@ -443,15 +486,28 @@ export default function EngineerActivityPanels({
         tone: "success",
         message: `Recheck queued for ${payload.detailLabel} (${payload.periodKey})${responseBody.requestId ? ` · ${responseBody.requestId}` : ""}.`,
       });
+      setIsFlagDialogOpen(false);
+      setActiveFlagDetail(null);
+      setFlagReason("");
     } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to flag this detail.";
+      setFlagReasonError(message);
       setFlagNotice({
         tone: "error",
-        message: error instanceof Error ? error.message : "Unable to flag this detail.",
+        message,
       });
     } finally {
       setFlaggingKey(null);
     }
   }
+
+  const activeFlagRequestKey = activeFlagDetail
+    ? `${activeFlagDetail.scope}:${activeFlagDetail.periodKey}:${sanitizeKey(activeFlagDetail.label)}`
+    : null;
+  const isSubmittingFlag = Boolean(
+    activeFlagRequestKey && flaggingKey === activeFlagRequestKey
+  );
 
   return (
     <div className="space-y-6">
@@ -669,16 +725,7 @@ export default function EngineerActivityPanels({
                     flaggingKey ===
                     `${detail.scope}:${detail.periodKey}:${sanitizeKey(detail.label)}`
                   }
-                  onFlag={() =>
-                    flagForRecheck({
-                      employeeEmail: snapshot.employee.email,
-                      employeeName: snapshot.employee.name,
-                      scope: detail.scope,
-                      periodKey: detail.periodKey,
-                      detailLabel: detail.label,
-                      detailValue: detail.text,
-                    })
-                  }
+                  onFlag={() => openFlagDialog(detail)}
                 />
               ))}
             </div>
@@ -707,16 +754,7 @@ export default function EngineerActivityPanels({
                       flaggingKey ===
                       `${detail.scope}:${detail.periodKey}:${sanitizeKey(detail.label)}`
                     }
-                    onFlag={() =>
-                      flagForRecheck({
-                        employeeEmail: snapshot.employee.email,
-                        employeeName: snapshot.employee.name,
-                        scope: detail.scope,
-                        periodKey: detail.periodKey,
-                        detailLabel: detail.label,
-                        detailValue: detail.text,
-                      })
-                    }
+                    onFlag={() => openFlagDialog(detail)}
                   />
                 ))
               ) : (
@@ -739,6 +777,64 @@ export default function EngineerActivityPanels({
           </div>
         ) : null}
       </section>
+
+      <AlertDialog
+        open={isFlagDialogOpen}
+        onOpenChange={(open) => {
+          setIsFlagDialogOpen(open);
+          if (!open) {
+            setFlagReasonError(null);
+          }
+        }}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader className="items-start text-left">
+            <AlertDialogTitle>Report inaccurate stat</AlertDialogTitle>
+            <AlertDialogDescription>
+              Add context so the assistant can recheck this detail.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {activeFlagDetail ? (
+            <div className="space-y-2">
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                {activeFlagDetail.label}
+              </div>
+              <div className="border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                {activeFlagDetail.text}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-foreground" htmlFor="flag-reason">
+              Why is this inaccurate?
+            </label>
+            <Textarea
+              id="flag-reason"
+              placeholder="Example: this PR was reverted, or this summary misses context."
+              value={flagReason}
+              onChange={(event) => setFlagReason(event.target.value)}
+              className="min-h-24 text-xs"
+              disabled={isSubmittingFlag}
+            />
+            {flagReasonError ? (
+              <div className="text-xs text-destructive">{flagReasonError}</div>
+            ) : null}
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSubmittingFlag}>Cancel</AlertDialogCancel>
+            <Button
+              type="button"
+              onClick={submitFlagForRecheck}
+              disabled={isSubmittingFlag}
+            >
+              {isSubmittingFlag ? "Submitting..." : "Submit recheck"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
