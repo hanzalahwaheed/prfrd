@@ -332,15 +332,16 @@ export default function EngineerActivityPanels({
   const [existingMonthlyReport, setExistingMonthlyReport] =
     useState<ExistingMonthlyReportView>({ kind: "idle" });
 
-  const visibleWeeks = weeklyHistory.slice(0, 4);
+  const visibleWeeks = useMemo(
+    () => weeklyHistory.slice(0, 4).reverse(),
+    [weeklyHistory]
+  );
   const selectedWeek = useMemo(
     () =>
-      visibleWeeks.find((week) => week.weekStart === selectedWeekKey) ??
       weeklyHistory.find((week) => week.weekStart === selectedWeekKey) ??
-      visibleWeeks[0] ??
       weeklyHistory[0] ??
       null,
-    [selectedWeekKey, visibleWeeks, weeklyHistory]
+    [selectedWeekKey, weeklyHistory]
   );
 
   const latestMonthlySummary = monthlySummaries[0] ?? null;
