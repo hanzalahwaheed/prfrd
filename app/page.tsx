@@ -53,7 +53,7 @@ export default function Page() {
               Engineering intelligence
             </div>
             <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-              Signals, not scores.
+              Your preferred way to map talent.
             </h1>
             <p className="max-w-xl text-base leading-relaxed text-muted-foreground">
               Weekly GitHub and Slack activity becomes cited monthly and
