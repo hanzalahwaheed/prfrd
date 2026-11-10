@@ -92,13 +92,6 @@ export default function ManagerDebateChat({
 }: ManagerDebateChatProps) {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<DebateViewState>({ kind: "idle" });
-  const [visibleRoles, setVisibleRoles] = useState<{
-    advocate: boolean;
-    examiner: boolean;
-  }>({
-    advocate: false,
-    examiner: false,
-  });
 
   useEffect(() => {
     if (!open) {
@@ -171,61 +164,6 @@ export default function ManagerDebateChat({
     return pickLatestMessages(state.data.messages);
   }, [state]);
 
-  useEffect(() => {
-    if (!open || state.kind !== "ready") {
-      const resetTimer = window.setTimeout(() => {
-        setVisibleRoles({
-          advocate: false,
-          examiner: false,
-        });
-      }, 0);
-
-      return () => {
-        window.clearTimeout(resetTimer);
-      };
-    }
-
-    const timers: number[] = [];
-    const hasAdvocate = Boolean(latestMessages.advocate);
-    const hasExaminer = Boolean(latestMessages.examiner);
-
-    timers.push(
-      window.setTimeout(() => {
-        setVisibleRoles({
-          advocate: false,
-          examiner: false,
-        });
-      }, 0)
-    );
-
-    if (hasAdvocate) {
-      timers.push(
-        window.setTimeout(() => {
-          setVisibleRoles((current) => ({ ...current, advocate: true }));
-        }, 120)
-      );
-    }
-
-    if (hasExaminer) {
-      timers.push(
-        window.setTimeout(() => {
-          setVisibleRoles((current) => ({ ...current, examiner: true }));
-        }, hasAdvocate ? 700 : 120)
-      );
-    }
-
-    return () => {
-      for (const timer of timers) {
-        window.clearTimeout(timer);
-      }
-    };
-  }, [
-    latestMessages.advocate,
-    latestMessages.examiner,
-    open,
-    state.kind,
-  ]);
-
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
@@ -269,11 +207,7 @@ export default function ManagerDebateChat({
 
               <div className="space-y-3">
                 {latestMessages.advocate ? (
-                  visibleRoles.advocate ? (
-                    <DebateBubble role="advocate" message={latestMessages.advocate} />
-                  ) : (
-                    <StreamingPlaceholder label="Advocate is responding..." />
-                  )
+                  <DebateBubble role="advocate" message={latestMessages.advocate} />
                 ) : (
                   <div className="text-xs text-muted-foreground">
                     No advocate response was persisted for this run.
@@ -281,11 +215,7 @@ export default function ManagerDebateChat({
                 )}
 
                 {latestMessages.examiner ? (
-                  visibleRoles.examiner ? (
-                    <DebateBubble role="examiner" message={latestMessages.examiner} />
-                  ) : visibleRoles.advocate || !latestMessages.advocate ? (
-                    <StreamingPlaceholder label="Examiner is responding..." />
-                  ) : null
+                  <DebateBubble role="examiner" message={latestMessages.examiner} />
                 ) : (
                   <div className="text-xs text-muted-foreground">
                     No examiner response was persisted for this run.
@@ -391,18 +321,6 @@ function DebateBubble({ role, message }: DebateBubbleProps) {
           ) : null}
         </div>
       </article>
-    </div>
-  );
-}
-
-type StreamingPlaceholderProps = {
-  label: string;
-};
-
-function StreamingPlaceholder({ label }: StreamingPlaceholderProps) {
-  return (
-    <div className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300 border border-dashed border-border/60 px-3 py-2">
-      <div className="animate-pulse text-xs text-muted-foreground">{label}</div>
     </div>
   );
 }

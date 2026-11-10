@@ -1,7 +1,7 @@
 import "server-only";
 
 import { generateText } from "ai";
-import { DEFAULT_OPENAI_MODEL, openai } from "@/lib/ai/openai";
+import { DEFAULT_OPENAI_MODEL, getOpenAI } from "@/lib/ai/openai";
 
 export type GenerateTextInput = {
   prompt: string;
@@ -25,7 +25,7 @@ export async function generateTextOnce(
   const modelId = input.model?.trim() || DEFAULT_OPENAI_MODEL;
 
   const result = await generateText({
-    model: openai(modelId),
+    model: getOpenAI()(modelId),
     system: input.system,
     prompt: input.prompt,
   });
