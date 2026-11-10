@@ -1,12 +1,11 @@
 import "server-only";
 
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import {
   type ArbiterDecisionOutput,
   type CombinedDebateOutput,
   type CombinedGuidanceOutput,
-  type EvidenceCatalogEntry,
   type ManagerAnalysisCoreInput,
   generateArbiterDecision,
   generateCombinedDebate,
@@ -20,6 +19,7 @@ import type {
   SignalEvidence,
 } from "@/lib/ai/insightGenerator";
 import { db } from "@/lib/db/config";
+import { buildEvidenceCatalog } from "@/lib/services/evidenceCatalog";
 import {
   analysisArbiterDecision,
   analysisDebateResponse,
@@ -289,112 +289,6 @@ function normalizeAndValidateMonthKeys(
   return { ok: true, months: normalized };
 }
 
-function buildEvidenceCatalog(input: {
-  quarter: string;
-  quarterly: QuarterlySynthesisOutput;
-  monthlyHistory: Array<{ month: string; synthesis: MonthlySynthesisOutput }>;
-}): EvidenceCatalogEntry[] {
-  const entries: EvidenceCatalogEntry[] = [];
-
-  function pushEntry(
-    sourceType: EvidenceCatalogEntry["sourceType"],
-    sourceKey: string,
-    field: string,
-    summary: string
-  ) {
-    const trimmed = summary.trim();
-    if (!trimmed) return;
-    const id = `E${entries.length + 1}`;
-    entries.push({ id, sourceType, sourceKey, field, summary: trimmed });
-  }
-
-  pushEntry(
-    "quarterly_synthesis",
-    input.quarter,
-    "trajectorySummary",
-    input.quarterly.trajectorySummary
-  );
-  for (const [index, strength] of input.quarterly.keyStrengths.entries()) {
-    pushEntry(
-      "quarterly_synthesis",
-      input.quarter,
-      `keyStrengths[${index}]`,
-      strength
-    );
-  }
-  for (const [index, concern] of input.quarterly.keyConcerns.entries()) {
-    pushEntry(
-      "quarterly_synthesis",
-      input.quarter,
-      `keyConcerns[${index}]`,
-      concern
-    );
-  }
-  pushEntry(
-    "quarterly_synthesis",
-    input.quarter,
-    "burnoutAssessment",
-    input.quarterly.burnoutAssessment
-  );
-  pushEntry(
-    "quarterly_synthesis",
-    input.quarter,
-    "growthAssessment",
-    input.quarterly.growthAssessment
-  );
-  pushEntry(
-    "quarterly_synthesis",
-    input.quarter,
-    "retentionAssessment",
-    input.quarterly.retentionAssessment
-  );
-  for (const [index, action] of input.quarterly.recommendedActions.entries()) {
-    pushEntry(
-      "quarterly_synthesis",
-      input.quarter,
-      `recommendedActions[${index}]`,
-      action
-    );
-  }
-  for (const snapshot of input.quarterly.evidenceSnapshots) {
-    for (const [index, evidence] of snapshot.evidence.entries()) {
-      pushEntry(
-        "quarterly_synthesis",
-        input.quarter,
-        `evidenceSnapshots.${snapshot.signalId}.evidence[${index}]`,
-        evidence.summary
-      );
-    }
-  }
-
-  for (const monthly of input.monthlyHistory) {
-    pushEntry(
-      "monthly_synthesis",
-      monthly.month,
-      "overallSummary",
-      monthly.synthesis.overallSummary
-    );
-    for (const [index, risk] of monthly.synthesis.identifiedRisks.entries()) {
-      pushEntry(
-        "monthly_synthesis",
-        monthly.month,
-        `identifiedRisks[${index}]`,
-        risk
-      );
-    }
-    for (const [index, opportunity] of monthly.synthesis.identifiedOpportunities.entries()) {
-      pushEntry(
-        "monthly_synthesis",
-        monthly.month,
-        `identifiedOpportunities[${index}]`,
-        opportunity
-      );
-    }
-  }
-
-  return entries;
-}
-
 function sanitizeErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return "Unknown error";
@@ -501,7 +395,8 @@ export async function generateManagerAnalysisOrchestration(
       and(
         eq(analysisRun.employeeEmail, employeeEmail),
         eq(analysisRun.quarter, quarter),
-        eq(analysisRun.status, "running")
+        eq(analysisRun.status, "running"),
+        sql`${analysisRun.requestPayload}->>'kind' IS DISTINCT FROM 'promotion_debate'`
       )
     )
     .limit(1);

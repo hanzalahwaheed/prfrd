@@ -1,6 +1,6 @@
 import "server-only";
 
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db/config";
 import {
@@ -111,7 +111,12 @@ export async function getManagerProfileInsightsByEmployeeEmail(
         createdAt: analysisRun.createdAt,
       })
       .from(analysisRun)
-      .where(eq(analysisRun.employeeEmail, employeeEmail))
+      .where(
+        and(
+          eq(analysisRun.employeeEmail, employeeEmail),
+          sql`${analysisRun.requestPayload}->>'kind' IS DISTINCT FROM 'promotion_debate'`
+        )
+      )
       .orderBy(desc(analysisRun.createdAt))
       .limit(20),
   ]);
