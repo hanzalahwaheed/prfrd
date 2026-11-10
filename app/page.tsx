@@ -32,19 +32,14 @@ export default function Page() {
       />
 
       <main className="relative mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-8">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-5">
-          <div className="flex items-center gap-3">
-            <span className="text-lg font-bold tracking-tight">prfrd</span>
-            <Badge
-              variant="outline"
-              className="text-[10px] uppercase tracking-[0.16em]"
-            >
-              Prototype
-            </Badge>
-          </div>
-          <span className="text-xs text-muted-foreground">
-            Evidence-grounded review prep
-          </span>
+        <header className="flex items-center justify-between gap-3 border-b border-border pb-5">
+          <span className="text-lg font-bold tracking-tight">prfrd</span>
+          <Badge
+            variant="outline"
+            className="text-[10px] uppercase tracking-[0.16em]"
+          >
+            Prototype
+          </Badge>
         </header>
 
         <section className="flex flex-1 flex-col justify-center py-16">
