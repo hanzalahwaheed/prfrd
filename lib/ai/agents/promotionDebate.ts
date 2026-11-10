@@ -211,6 +211,21 @@ function extractEvidenceRefs(text: string, validIds: Set<string>): string[] {
   return Array.from(refs);
 }
 
+function normalizeEvidenceRefs(
+  refs: string[],
+  validIds: Set<string>
+): string[] {
+  const normalized = new Set<string>();
+  for (const ref of refs) {
+    for (const match of ref.matchAll(/\bE\d+\b/g)) {
+      if (validIds.has(match[0])) {
+        normalized.add(match[0]);
+      }
+    }
+  }
+  return Array.from(normalized);
+}
+
 function sanitizeBullets(
   bullets: Array<{ claim: string; evidenceRefs: string[] }>,
   validIds: Set<string>
@@ -218,7 +233,7 @@ function sanitizeBullets(
   return bullets
     .map((bullet) => ({
       claim: stripProhibitedSentences(bullet.claim),
-      evidenceRefs: bullet.evidenceRefs.filter((ref) => validIds.has(ref)),
+      evidenceRefs: normalizeEvidenceRefs(bullet.evidenceRefs, validIds),
     }))
     .filter((bullet) => bullet.claim.length > 0 && bullet.evidenceRefs.length > 0);
 }
