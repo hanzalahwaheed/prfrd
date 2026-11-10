@@ -10,7 +10,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PRFRD — Engineering intelligence",
+  title: "prfrd",
   description:
     "Your preferred way to map talent. Evidence-grounded review prep built from GitHub and Slack signals.",
 };
