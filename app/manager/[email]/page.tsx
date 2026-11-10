@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import ManagerDebateChat from "@/components/manager/manager-debate-chat";
+import PromotionDebatePanel from "@/components/manager/promotion-debate-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -114,15 +114,16 @@ export default async function ManagerEngineerDetailPage({ params }: PageProps) {
           </Button>
         </header>
 
-        <section className="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <section className="mt-6 space-y-3">
           <div className="text-xs text-muted-foreground">
             {profileInsights.latestRun
               ? `Latest analysis run #${profileInsights.latestRun.id} · ${profileInsights.latestRun.quarter}`
               : "No manager analysis run found yet."}
           </div>
-          <ManagerDebateChat
+          <PromotionDebatePanel
             employeeEmail={snapshot.employee.email}
             employeeName={snapshot.employee.name}
+            quarter={profileInsights.latestRun?.quarter}
           />
         </section>
 
