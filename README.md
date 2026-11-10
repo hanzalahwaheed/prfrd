@@ -1,193 +1,136 @@
 # PRFRD
 
-PRFRD is an autonomous agent platform for weekly engineering signal ingestion, manager analysis, and role-based dashboards.
+PRFRD is a working prototype of an evidence-grounded engineering intelligence app. It turns weekly GitHub and Slack activity into monthly and quarterly signals, then produces manager-facing analysis where every claim is tied to a stored evidence reference.
 
-## What ships in this MVP
+The design goal is restraint: qualitative assessments, explicit uncertainty, no peer rankings, and no automated compensation decisions.
 
-- Weekly GitHub and Slack activity model in Postgres
-- Monthly and quarterly synthesis generation from weekly signals
-- Manager analysis orchestration with evidence-backed outputs
-- Engineer and manager dashboards with drill-down views
-- Slack delivery paths for agent updates (bot token or webhooks)
+> **Status:** prototype. The analysis pipeline, database schema, guardrails, and dashboards are implemented. Ingestion currently runs from seeded fixtures. See [Current limitations](#current-limitations).
+
+## What works today
+
+- Weekly GitHub and Slack activity modeled in PostgreSQL with Drizzle
+- Monthly and quarterly signal extraction with schema-validated LLM output
+- Advocate / examiner / arbiter analysis flow with evidence-reference validation
+- Guardrails against peer comparison, compensation language, and overconfident claims
+- Manager dashboard with team rollups, risk flags, and engineer drill-downs
+- Engineer dashboard with weekly activity, monthly summaries, and report generation
+- Two-round promotion debate: advocate and examiner argue from one evidence catalog, streamed live to the manager
+- Moderator readiness signal (`strong_case`, `mixed`, `not_yet`, `insufficient_evidence`) with open questions and what would change it
+- Manager analysis and promotion debate turns persisted for audit
+- Slack delivery helpers for agent updates
+
+## Current limitations
+
+These are known and intentional for the prototype stage:
+
+- **Ingestion is simulated.** `npm run db:seed` loads realistic fixtures into the same tables a real collector would write to. There are no GitHub or Slack API clients yet.
+- **Dashboards read fixtures.** The dashboard data layer reads the seed module directly instead of querying PostgreSQL. The analysis and manager-profile pages do read persisted rows.
+- **Insight generation is single-pass.** Monthly and quarterly summaries are produced by one structured call each. The promotion debate is the only multi-turn agent loop.
+- **The promotion debate needs persisted insights.** It reads the latest quarterly synthesis and its months; when those rows are missing the API returns a `409` instead of inventing context.
+- **The moderator does not decide anything.** It returns a readiness signal so the manager can judge the case. No promotion, bonus, or compensation decision is automated.
+- **No auth, tests, or CI yet.** Do not deploy this publicly as-is.
+
+## Stack
+
+- Next.js 16 (App Router) and React 19
+- Vercel AI SDK with OpenAI models
+- PostgreSQL (Neon serverless driver) and Drizzle ORM
+- Tailwind CSS v4 and shadcn-style primitives
 
 ## Architecture
 
-<img width="1275" height="396" alt="image" src="https://github.com/user-attachments/assets/cccf4505-420d-4f58-9460-6c4cee0c0fa0" />
-
-
-### Data ingestion pipeline (autonomous + weekly cron)
-
-Every week, autonomous collector agents ingest collaboration and delivery signals from GitHub and Slack into normalized weekly tables.
-
-- GitHub collector agent writes to `github_weekly_activity`
-- Slack collector agent writes to `slack_weekly_activity`
-- A weekly cron scheduler triggers ingestion
-- Ingested data becomes the source for synthesis and analysis runs
-
-MVP implementation note: local development currently uses seeded weekly snapshots as the ingestion simulator (`npm run db:seed` and `npm run db:seed:eve`).
-
-### Analysis engine (three parallel agent flows)
-
-Once monthly and quarterly evidence exists, the analysis engine fans out into three parallel agent flows:
-
-1. Debate
-   - Advocate and examiner agents produce opposing evidence-backed positions.
-2. Employee check prompts
-   - Agent generates employee-facing check-in prompts by theme.
-3. Feedback for the manager
-   - Agent generates manager coaching guidance and follow-up prompts.
-
-Analysis artifacts are persisted in:
-
-- `analysis_run`
-- `analysis_debate_response`
-- `analysis_arbiter_decision`
-- `employee_prompt`
-- `manager_feedback`
-
-### Dashboard features
-
-- Role-based entry point for engineer and manager workspaces
-- Engineer dashboard
-  - Weekly activity cards from GitHub and Slack signals
-  - Monthly summary cards
-  - "Generate monthly report" action
-  - "Recheck stats" assistant request flow
-- Manager dashboard
-  - Team KPI rollups (PRs, reviews, messages, replies)
-  - Risk flags (after-hours load, blockers, weekend load)
-  - Engineer-level drill-down pages
-  - Debate conversation panel backed by persisted agent responses
-
 ```mermaid
 flowchart LR
-  subgraph Ingestion["Data ingestion pipeline"]
-    Cron["Weekly cron scheduler (autonomous)"]
-    GH["GitHub collector agent"]
-    SL["Slack collector agent"]
-    W[(Weekly activity tables)]
-    Cron --> GH --> W
-    Cron --> SL --> W
+  subgraph Input
+    Seed["Seed fixtures<br/>(GitHub + Slack weekly)"]
   end
 
-  subgraph Synthesis["Synthesis layer"]
-    M["Monthly synthesis"]
-    Q["Quarterly synthesis"]
-    W --> M --> Q
+  subgraph Storage["PostgreSQL"]
+    W[(weekly activity)]
+    M[(monthly insights)]
+    Q[(quarterly insights)]
+    A[(analysis runs + debates)]
   end
 
-  subgraph Analysis["Analysis engine"]
-    E["Evidence pack"]
-    D["Flow 1: Debate"]
-    P["Flow 2: Employee check prompts"]
-    F["Flow 3: Feedback for manager"]
-    Q --> E
-    E --> D
-    E --> P
-    E --> F
+  subgraph Pipeline
+    S["Signal extraction"]
+    D["Advocate / examiner"]
+    R["Arbiter"]
+    P["Promotion debate<br/>(2 rounds + moderator)"]
   end
 
-  subgraph UX["Dashboards and delivery"]
+  subgraph UI
     Eng["Engineer dashboard"]
     Mgr["Manager dashboard"]
-    Slack["Slack agent updates"]
   end
 
+  Seed --> W
+  W --> S --> M --> Q
+  Q --> D --> R --> A
+  Q --> P --> A
   W --> Eng
-  D --> Mgr
-  P --> Eng
-  F --> Mgr
-  F --> Slack
+  M --> Eng
+  A --> Mgr
 ```
 
-## Local setup
+### Analysis flow
 
-### Prerequisites
+1. Weekly rows are grouped into months and quarters.
+2. Each period is normalized and sent to a structured extraction pass with data-sufficiency scoring.
+3. The manager analysis builds an evidence catalog (`E1`, `E2`, ...) from monthly and quarterly artifacts.
+4. Advocate and examiner assessments are generated from the same evidence, followed by an arbiter decision.
+5. Outputs are validated with Zod, checked against the evidence catalog, and persisted.
+6. Managers can start a promotion debate on demand. Round 1 is independent opening cases, round 2 is a direct rebuttal, and a moderator synthesizes the strongest argument on each side without picking a winner.
+7. Debate turns stream to the manager as NDJSON events and are written to `analysis_debate_turn` before the next turn starts.
 
-- Node.js 20+
-- npm 10+
-- PostgreSQL connection string (Neon works out of the box)
-- OpenAI API key
-- Slack app credentials (only needed for Slack delivery routes)
+### Promotion debate
 
-### 1) Install dependencies
+The debate is a real agent loop, not one prompt with two voices:
+
+- Both agents receive the same evidence catalog and a `lookupEvidence` tool, but opposite objectives.
+- Round 2 requires each agent to answer the opponent's strongest point, concede what is valid, and add at most one new piece of evidence.
+- The moderator returns `strong_case`, `mixed`, `not_yet`, or `insufficient_evidence`, plus the strongest arguments, open questions, and what additional evidence would change the assessment.
+- Coverage still wins: `insufficient` data forces `insufficient_evidence` and low confidence, and `partial` data caps confidence at medium.
+- The stop button aborts the run; the `analysis_run` row is marked `canceled` and completed turns remain readable.
+
+### Guardrails
+
+- Every claim must reference a known evidence ID
+- Peer comparisons and team averages are rejected
+- Compensation language is rejected in employee-facing prompts
+- Confidence is downgraded when coverage is partial or insufficient
+- Numeric performance scores are not produced
+- The debate moderator never issues a promotion verdict; it returns a readiness signal for the manager
+
+## Setup
 
 ```bash
 npm install
-```
+cp .env.example .env.local
+# fill in DATABASE_URL and OPENAI_API_KEY
 
-### 2) Configure environment
-
-Create `/Users/hanzo/prfrd/.env.local`:
-
-```bash
-DATABASE_URL=
-OPENAI_API_KEY=
-
-# Optional model tuning
-OPENAI_MODEL=gpt-5.1
-OPENAI_MODEL_VERSION=unspecified
-INSIGHT_LLM_MIN_INTERVAL_MS=30000
-MANAGER_ANALYSIS_LLM_MIN_INTERVAL_MS=30000
-
-# Slack app credentials (API path)
-SLACK_APP_ID=
-SLACK_CLIENT_ID=
-SLACK_CLIENT_SECRET=
-SLACK_SIGNING_SECRET=
-SLACK_VERIFICATION_TOKEN=
-SLACK_APP_TOKEN=
-SLACK_BOT_TOKEN=
-
-# Slack webhook credentials (optional)
-SLACK_WEBHOOK_ALICE_URL=
-SLACK_WEBHOOK_BOB_URL=
-SLACK_WEBHOOK_EVE_URL=
-SLACK_WEBHOOK_MANAGER_URL=
-```
-
-### 3) Apply schema and seed weekly data
-
-```bash
 npm run db:push
 npm run db:seed
-```
-
-### 4) Start the app
-
-```bash
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Autonomous weekly ingestion via cron (local)
+## Commands
 
-For local demos, cron can run the ingestion simulator weekly so dashboards always have fresh weekly snapshots.
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Start the local dev server |
+| `npm run build` | Production build (works without secrets) |
+| `npm run start` | Run the production build |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | TypeScript, no emit |
+| `npm run db:generate` | Generate Drizzle migrations |
+| `npm run db:push` | Apply schema to the database |
+| `npm run db:seed` | Load the full fixture dataset |
+| `npm run db:seed:eve` | Add or update the Eve persona only |
 
-1. Create log directory:
-
-```bash
-mkdir -p /Users/hanzo/prfrd/.cron-logs
-```
-
-2. Open crontab:
-
-```bash
-crontab -e
-```
-
-3. Add weekly autonomous ingestion (every Monday at 6:00 AM local time):
-
-```cron
-0 6 * * 1 cd /Users/hanzo/prfrd && /usr/bin/env npm run db:seed >> /Users/hanzo/prfrd/.cron-logs/weekly-ingestion.log 2>&1
-```
-
-Production swap-in: replace `npm run db:seed` with your live GitHub and Slack collectors, keeping the same schedule shape.
-
-## Run analysis workflows
-
-### Generate monthly and quarterly insights
+## Generate analysis
 
 ```bash
 curl -sS -X POST http://localhost:3000/api/insights/generate-report \
@@ -195,21 +138,39 @@ curl -sS -X POST http://localhost:3000/api/insights/generate-report \
   -d '{"employeeEmail":"alice@company.com"}'
 ```
 
-### Generate manager analysis for a quarter
-
 ```bash
 curl -sS -X POST http://localhost:3000/api/insights/generate-manager-analysis \
   -H 'Content-Type: application/json' \
   -d '{"employeeEmail":"alice@company.com","quarter":"2025-Q4","monthKeys":["2025-10","2025-11","2025-12"]}'
 ```
 
-## Command reference
+## Run a promotion debate
 
-- `npm run dev` - start local Next.js server
-- `npm run build` - create production build
-- `npm run start` - run production server
-- `npm run lint` - run ESLint
-- `npm run db:generate` - generate Drizzle migrations
-- `npm run db:push` - apply schema changes to database
-- `npm run db:seed` - seed full local MVP dataset
-- `npm run db:seed:eve` - append/update only Eve data
+```bash
+curl -N -X POST http://localhost:3000/api/agents/promotion-debate \
+  -H 'Content-Type: application/json' \
+  -d '{"employeeEmail":"alice@company.com"}'
+```
+
+The response is newline-delimited JSON. Events are `run_started`, `turn_started`, `delta`, `tool_call`, `tool_result`, `turn_completed`, `summary`, `run_completed`, and `error`. Omit `quarter` to use the latest stored quarter.
+
+Read the latest persisted debate:
+
+```bash
+curl -sS "http://localhost:3000/api/agents/promotion-debate?employeeEmail=alice@company.com"
+```
+
+## Roadmap
+
+- Replace seed fixtures with real GitHub and Slack collectors and an incremental sync
+- Move dashboard reads onto Drizzle query services
+- Extend the tool-calling agent loop to monthly and quarterly insight generation
+- Add durable, resumable analysis runs with human approval before delivery
+- Add an eval harness for citation validity, unsupported claims, and bias leakage
+- Add auth, rate limiting, tests, and CI
+
+See [`docs/insights-sequential-runbook.md`](docs/insights-sequential-runbook.md) for manual insight generation.
+
+## License
+
+MIT

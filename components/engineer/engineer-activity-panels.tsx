@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -333,15 +332,16 @@ export default function EngineerActivityPanels({
   const [existingMonthlyReport, setExistingMonthlyReport] =
     useState<ExistingMonthlyReportView>({ kind: "idle" });
 
-  const visibleWeeks = weeklyHistory.slice(0, 4);
+  const visibleWeeks = useMemo(
+    () => weeklyHistory.slice(0, 4).reverse(),
+    [weeklyHistory]
+  );
   const selectedWeek = useMemo(
     () =>
-      visibleWeeks.find((week) => week.weekStart === selectedWeekKey) ??
       weeklyHistory.find((week) => week.weekStart === selectedWeekKey) ??
-      visibleWeeks[0] ??
       weeklyHistory[0] ??
       null,
-    [selectedWeekKey, visibleWeeks, weeklyHistory]
+    [selectedWeekKey, weeklyHistory]
   );
 
   const latestMonthlySummary = monthlySummaries[0] ?? null;
@@ -517,11 +517,6 @@ export default function EngineerActivityPanels({
           <CardDescription className="text-sm">
             Pick a week card to focus the view. Monthly report details are available from the sheet.
           </CardDescription>
-          <CardAction>
-            <Badge variant="outline" className="text-xs">
-              {visibleWeeks.length} cards
-            </Badge>
-          </CardAction>
         </CardHeader>
 
         <CardContent className="space-y-5">
@@ -555,7 +550,7 @@ export default function EngineerActivityPanels({
                     >
                       Week {index + 1}
                     </div>
-                    <div className="text-lg font-semibold sm:text-xl">
+                    <div className="text-xl font-semibold tracking-tight sm:text-2xl">
                       {formatWeek(week.weekStart)}
                     </div>
                     <div

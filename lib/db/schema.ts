@@ -245,6 +245,39 @@ export const analysisArbiterDecision = pgTable(
   (table) => [uniqueIndex("analysis_arbiter_decision_run_idx").on(table.runId)]
 );
 
+export const analysisDebateTurn = pgTable(
+  "analysis_debate_turn",
+  {
+    id: serial("id").primaryKey(),
+    runId: integer("run_id")
+      .notNull()
+      .references(() => analysisRun.id, { onDelete: "cascade" }),
+    round: integer("round").notNull(),
+    turnIndex: integer("turn_index").notNull(),
+    agentRole: varchar("agent_role", { length: 16 }).notNull(),
+    phase: varchar("phase", { length: 16 }).notNull(),
+    content: text("content").notNull(),
+    evidenceRefs: jsonb("evidence_refs")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    toolCalls: jsonb("tool_calls").notNull().default(sql`'[]'::jsonb`),
+    generatedByModel: varchar("generated_by_model", { length: 64 }).notNull(),
+    modelVersion: varchar("model_version", { length: 64 }).notNull(),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("analysis_debate_turn_run_round_role_idx").on(
+      table.runId,
+      table.round,
+      table.turnIndex,
+      table.agentRole
+    ),
+    index("analysis_debate_turn_run_idx").on(table.runId),
+  ]
+);
+
 export const employeePrompt = pgTable(
   "employee_prompt",
   {

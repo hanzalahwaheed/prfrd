@@ -1,13 +1,8 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Inter } from "next/font/google";
+import { Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -16,7 +11,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "prfrd",
-  description: "Your preferred way to map talent.",
+  description:
+    "Your preferred way to map talent. Evidence-grounded review prep built from GitHub and Slack signals.",
 };
 
 export default function RootLayout({
@@ -26,11 +22,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={inter.variable}>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
-      </body>
+      <body className={`${geistMono.variable} antialiased`}>{children}</body>
     </html>
   );
 }
