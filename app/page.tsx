@@ -49,17 +49,25 @@ export default function Page() {
 
         <section className="flex flex-1 flex-col justify-center py-16">
           <div className="max-w-2xl space-y-5">
-            <div className="text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
-              Engineering intelligence
-            </div>
             <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
               Your preferred way to map talent.
             </h1>
             <p className="max-w-xl text-base leading-relaxed text-muted-foreground">
-              Weekly GitHub and Slack activity becomes cited monthly and
-              quarterly evidence. Managers get review-ready context; engineers
-              get a clear view of their own work. No rankings, no opaque
-              verdicts.
+              <strong className="font-semibold text-foreground">
+                Weekly GitHub and Slack activity
+              </strong>{" "}
+              becomes{" "}
+              <strong className="font-semibold text-foreground">
+                cited monthly and quarterly evidence
+              </strong>
+              . Managers get{" "}
+              <strong className="font-semibold text-foreground">
+                review-ready context
+              </strong>
+              ; engineers get a clear view of their own work.{" "}
+              <strong className="font-semibold text-foreground">
+                No rankings, no opaque verdicts.
+              </strong>
             </p>
           </div>
 
